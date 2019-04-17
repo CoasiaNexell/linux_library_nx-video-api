@@ -6,6 +6,9 @@ include $(CLEAR_VARS)
 #
 USE_ION_ALLOCATOR := true
 
+ANDROID_VERSION_STR := $(subst ., ,$(PLATFORM_VERSION))
+ANDROID_VERSION := $(firstword $(ANDROID_VERSION_STR))
+
 #
 #	Compile Options
 #
@@ -28,6 +31,10 @@ LOCAL_SHARED_LIBRARIES :=	\
 	liblog 		\
 	libcutils	\
 	libhardware
+
+ifeq "9" "$(ANDROID_VERSION)"
+LOCAL_SHARED_LIBRARIES += libion
+endif
 
 ifeq ($(USE_ION_ALLOCATOR),true)
 LOCAL_SRC_FILES := \
@@ -53,7 +60,11 @@ LOCAL_32_BIT_ONLY := true
 LOCAL_MODULE := libnx_video_api
 #LOCAL_MODULE_PATH := $(LOCAL_PATH)
 
+ifeq ($(ANDROID_VERSION), 9)
+LOCAL_VENDOR_MODULE := true
+else
 LOCAL_MODULE_TAGS := optional
+endif
 
 include $(BUILD_SHARED_LIBRARY)
 
