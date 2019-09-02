@@ -255,8 +255,8 @@ NX_VID_MEMORY_INFO * NX_AllocateVideoMemory( int width, int height, int32_t plan
 	//	Chroma
 	switch (format)
 	{
-	case DRM_FORMAT_NV12:
-	case DRM_FORMAT_NV21:
+	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_NV21:
 	case V4L2_PIX_FMT_YUV420:	// DRM_FORMAT_YUV420
 	case V4L2_PIX_FMT_YVU420:	// DRM_FORMAT_YVU420
 	case V4L2_PIX_FMT_YUV420M:
