@@ -356,6 +356,18 @@ static int32_t GetSequenceHeader(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeq
 	case V4L2_PIX_FMT_DIV5:
 	case V4L2_PIX_FMT_DIV6:
 	case V4L2_PIX_FMT_MPEG4:
+		if(V4L2_PIX_FMT_DIV5 == hDec->codecType)
+		{
+			if(pSeqIn->seqSize >= 4)
+			{
+				// sequence start code
+				if( (pbySrc[0] != 0x00) || (pbySrc[1] != 0x00) ||
+					(pbySrc[2] != 0x01) || (pbySrc[3] != 0xb0) )
+				{
+					return -1;
+				}
+			}
+		}
 		Mp4DecParseVideoCfg(hDec, pbySrc, pSeqIn->seqSize);
 
 	default:
