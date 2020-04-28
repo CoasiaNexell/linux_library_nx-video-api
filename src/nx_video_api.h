@@ -165,6 +165,10 @@ typedef struct tNX_V4L2DEC_SEQ_IN {
 
 	/* for JPEG Decoder */
 	int32_t thumbnailMode;			/* 0 : jpeg mode, 1 : thumbnail mode */
+
+	/* for Video Out Reorder */
+	/* Used when there is no B-Frame. */
+	int32_t disableVideoOutReorder;	/* 0 : EnableVideoOutReorder, 1 : DisableVideoOutReorder */
 } NX_V4L2DEC_SEQ_IN;
 
 typedef struct tNX_V4L2DEC_SEQ_OUT {

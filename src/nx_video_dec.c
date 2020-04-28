@@ -637,6 +637,20 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 				return -1;
 			}
 		}
+
+		if (pSeqIn->disableVideoOutReorder)
+		{
+			struct v4l2_control ctrl;
+
+			ctrl.id = V4L2_CID_DISABLE_VIDEO_OUT_REORDER;
+			ctrl.value = pSeqIn->disableVideoOutReorder;
+
+			if (ioctl(hDec->fd, VIDIOC_S_CTRL, &ctrl) != 0)
+			{
+				printf("failed to ioctl: Set DisableVideoOutReorder\n");
+				return -1;
+			}
+		}
 	}
 
 	/* Parser Sequence Header */
