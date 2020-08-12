@@ -1025,7 +1025,7 @@ int32_t NX_V4l2DecDecodeFrame(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, NX_
 
 	hDec->frameCnt++;
 
-	if (pDecOut->dispIdx == -1)
+	if (pDecOut->dispIdx == -1 || pDecOut->dispIdx == -20)
 		return -1;
 
 	return 0;
