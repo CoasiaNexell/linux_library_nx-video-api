@@ -563,7 +563,7 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 	hDec->seqDataSize = (pSeqIn->seqSize < 1024) ? pSeqIn->seqSize : sizeof(hDec->pSeqData);
 	memcpy(hDec->pSeqData, pSeqIn->seqBuf, hDec->seqDataSize);
 
-	/* Set Stream Formet */
+	/* Set Stream Format */
 	{
 		struct v4l2_format fmt;
 
@@ -623,33 +623,32 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 	}
 
 	/* Set Parameter */
+	if (hDec->codecType == V4L2_PIX_FMT_MJPEG)
 	{
-		if (hDec->codecType == V4L2_PIX_FMT_MJPEG)
+		struct v4l2_control ctrl;
+
+		ctrl.id = V4L2_CID_MPEG_VIDEO_THUMBNAIL_MODE;
+		ctrl.value = pSeqIn->thumbnailMode;
+
+		if (ioctl(hDec->fd, VIDIOC_S_CTRL, &ctrl) != 0)
 		{
-			struct v4l2_control ctrl;
-
-			ctrl.id = V4L2_CID_MPEG_VIDEO_THUMBNAIL_MODE;
-			ctrl.value = pSeqIn->thumbnailMode;
-
-			if (ioctl(hDec->fd, VIDIOC_S_CTRL, &ctrl) != 0)
-			{
-				printf("failed to ioctl: Set Thumbnail Mode\n");
-				return -1;
-			}
+			printf("failed to ioctl: Set Thumbnail Mode\n");
+			return -1;
 		}
+	}
 
-		if (pSeqIn->disableVideoOutReorder)
+	/* Set Parameter : lowDelay mode */
+	if (hDec->codecType == V4L2_PIX_FMT_H264)
+	{
+		struct v4l2_control ctrl;
+
+		ctrl.id = V4L2_CID_MPEG_VIDEO_LOW_DELAY_MODE;
+		ctrl.value = pSeqIn->lowDelay;
+
+		if (ioctl(hDec->fd, VIDIOC_S_CTRL, &ctrl) != 0)
 		{
-			struct v4l2_control ctrl;
-
-			ctrl.id = V4L2_CID_DISABLE_VIDEO_OUT_REORDER;
-			ctrl.value = pSeqIn->disableVideoOutReorder;
-
-			if (ioctl(hDec->fd, VIDIOC_S_CTRL, &ctrl) != 0)
-			{
-				printf("failed to ioctl: Set DisableVideoOutReorder\n");
-				return -1;
-			}
+			printf("failed to ioctl: Set Low Delay Mode\n");
+			return -1;
 		}
 	}
 
