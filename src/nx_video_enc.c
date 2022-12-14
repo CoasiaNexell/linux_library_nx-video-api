@@ -118,9 +118,8 @@ static int V4l2EncOpen(void)
 /*----------------------------------------------------------------------------*/
 NX_V4L2ENC_HANDLE NX_V4l2EncOpen(uint32_t codecType)
 {
-	NX_V4L2ENC_HANDLE hEnc = (NX_V4L2ENC_HANDLE)malloc(sizeof(struct NX_V4L2ENC_INFO));
-
-	memset(hEnc, 0, sizeof(struct NX_V4L2ENC_INFO));
+	struct v4l2_capability cap = {0, };
+	NX_V4L2ENC_HANDLE hEnc = (NX_V4L2ENC_HANDLE)calloc(1, sizeof(struct NX_V4L2ENC_INFO));
 
 	hEnc->fd = V4l2EncOpen();
 	if (hEnc->fd <= 0)
@@ -130,16 +129,10 @@ NX_V4L2ENC_HANDLE NX_V4l2EncOpen(uint32_t codecType)
 	}
 
 	/* Query capabilities of Device */
+	if (ioctl(hEnc->fd, VIDIOC_QUERYCAP, &cap) != 0)
 	{
-		struct v4l2_capability cap;
-
-		memset(&cap, 0, sizeof(cap));
-
-		if (ioctl(hEnc->fd, VIDIOC_QUERYCAP, &cap) != 0)
-		{
-			printf("failed to ioctl: VIDIOC_QUERYCAP\n");
-			goto ERROR_EXIT;
-		}
+		printf("failed to ioctl: VIDIOC_QUERYCAP\n");
+		goto ERROR_EXIT;
 	}
 
 	hEnc->codecType = codecType;

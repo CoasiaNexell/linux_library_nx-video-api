@@ -4,9 +4,11 @@ AM_CFLAGS = \
 	-I${includedir}	\
 	-I${includedir}/libdrm
 
+AM_CFLAGS += -funwind-tables
+
 libnx_video_api_la_LTLIBRARIES = libnx_video_api.la
 libnx_video_api_ladir = ${libdir}
-libnx_video_api_la_LDFLAGS = -L${libdir} -ldrm
+libnx_video_api_la_LDFLAGS = -rdynamic -L${libdir} -ldrm
 
 libnx_video_api_la_SOURCES = \
 	nx_video_alloc_drm.c	\

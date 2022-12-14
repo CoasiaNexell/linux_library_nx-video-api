@@ -22,6 +22,9 @@
 
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/syscall.h>
+#include <errno.h>
+#include <time.h>
 
 #include <linux/videodev2.h>
 #include <linux/videodev2_nxp_media.h>
@@ -33,6 +36,67 @@
 #define NX_V4L2_DEC_NAME		"nx-vpu-dec"
 #define VIDEODEV_MINOR_MAX		63
 #define STREAM_BUFFER_NUM		1
+
+#ifndef SYS_gettid
+#error "SYS_gettid unavailable on this system"
+#endif
+
+#define gettid() ((pid_t)syscall(SYS_gettid))
+#define NX_DEC_IOCTL_ERR_LOG(X, Y) \
+		do{ \
+			printf("[%d][%s:%d][NX_VDEC ERR] Failed - ioctl (%s) ret %d\n", \
+				gettid(), __FUNCTION__, __LINE__, (const char *)X, Y); \
+		}while(0)
+
+#define NX_DEC_IOCTL_ERR_LOG_PARAM(X, Y, Z) \
+		do{ \
+			printf("[%d][%s:%d][NX_VDEC ERR] Failed - ioctl (%s) ret %d %d\n", \
+				gettid(), __FUNCTION__, __LINE__, (const char *)X, Y, Z); \
+		}while(0)
+
+#define NX_DEC_COMMN_ERR_LOG(args...)	printf("[NX_VDEC ERR] "args)
+#define NX_DEC_INFO(args...)			printf("[NX_VDEC INF] "args)
+#define NX_DEC_BEBUG(args...)			printf("[NX_VDEC DBG] "args)
+
+
+#ifndef MKTAG
+#define MKTAG(a,b,c,d) (a | (b << 8) | (c << 16) | (d << 24))
+#endif
+
+#ifndef PUT_LE32
+#define PUT_LE32(_p, _var) \
+	*_p++ = (uint8_t)((_var) >> 0); \
+	*_p++ = (uint8_t)((_var) >> 8); \
+	*_p++ = (uint8_t)((_var) >> 16); \
+	*_p++ = (uint8_t)((_var) >> 24);
+#endif
+
+#ifndef PUT_BE32
+#define PUT_BE32(_p, _var) \
+	*_p++ = (uint8_t)((_var) >> 24); \
+	*_p++ = (uint8_t)((_var) >> 16); \
+	*_p++ = (uint8_t)((_var) >> 8); \
+	*_p++ = (uint8_t)((_var) >> 0);
+#endif
+
+#ifndef PUT_LE16
+#define PUT_LE16(_p, _var) \
+	*_p++ = (uint8_t)((_var) >> 0); \
+	*_p++ = (uint8_t)((_var) >> 8);
+#endif
+
+#ifndef PUT_BE16
+#define PUT_BE16(_p, _var) \
+	*_p++ = (uint8_t)((_var) >> 8); \
+	*_p++ = (uint8_t)((_var) >> 0);
+#endif
+
+
+typedef struct {
+	uint32_t			dwUsedBits;
+	uint8_t				*pbyStart;
+	uint32_t			dwPktSize;
+} VLD_STREAM;
 
 
 struct NX_V4L2DEC_INFO {
@@ -91,7 +155,7 @@ static int32_t V4l2DecOpen(void)
 			sprintf(filename, "/sys/class/video4linux/video%d/name", i);
 			stream_fd = fopen(filename, "r");
 			if (stream_fd == NULL) {
-				printf("failed to open sysfs entry for videodev \n");
+				NX_DEC_BEBUG("failed to open sysfs entry for videodev \n");
 				i++;
 				continue;
 			}
@@ -99,13 +163,13 @@ static int32_t V4l2DecOpen(void)
 			/* read sysfs entry for device name */
 			if (fgets(name, sizeof(name), stream_fd) == 0)
 			{
-				printf("failed to read sysfs entry for videodev\n");
+				NX_DEC_BEBUG("failed to read sysfs entry for videodev\n");
 			}
 			else
 			{
 				if (strncmp(name, NX_V4L2_DEC_NAME, strlen(NX_V4L2_DEC_NAME)) == 0)
 				{
-					printf("node found for device %s: /dev/video%d \n", NX_V4L2_DEC_NAME, i);
+					NX_DEC_INFO("node found for device %s: /dev/video%d\n", NX_V4L2_DEC_NAME, i);
 					found = true;
 				}
 			}
@@ -119,51 +183,11 @@ static int32_t V4l2DecOpen(void)
 	if (found)
 	{
 		sprintf(filename, "/dev/video%d", i - 1);
-		fd = open(filename,  O_RDWR);
+		fd = open(filename,  O_RDWR | O_NONBLOCK);
 	}
 
 	return fd;
 }
-
-
-#ifndef MKTAG
-#define MKTAG(a,b,c,d) (a | (b << 8) | (c << 16) | (d << 24))
-#endif
-
-#ifndef PUT_LE32
-#define PUT_LE32(_p, _var) \
-	*_p++ = (uint8_t)((_var) >> 0); \
-	*_p++ = (uint8_t)((_var) >> 8); \
-	*_p++ = (uint8_t)((_var) >> 16); \
-	*_p++ = (uint8_t)((_var) >> 24);
-#endif
-
-#ifndef PUT_BE32
-#define PUT_BE32(_p, _var) \
-	*_p++ = (uint8_t)((_var) >> 24); \
-	*_p++ = (uint8_t)((_var) >> 16); \
-	*_p++ = (uint8_t)((_var) >> 8); \
-	*_p++ = (uint8_t)((_var) >> 0);
-#endif
-
-#ifndef PUT_LE16
-#define PUT_LE16(_p, _var) \
-	*_p++ = (uint8_t)((_var) >> 0); \
-	*_p++ = (uint8_t)((_var) >> 8);
-#endif
-
-#ifndef PUT_BE16
-#define PUT_BE16(_p, _var) \
-	*_p++ = (uint8_t)((_var) >> 8); \
-	*_p++ = (uint8_t)((_var) >> 0);
-#endif
-
-
-typedef struct {
-	uint32_t			dwUsedBits;
-	uint8_t				*pbyStart;
-	uint32_t			dwPktSize;
-} VLD_STREAM;
 
 static int32_t vld_count_leading_zero(uint32_t dwWord)
 {
@@ -317,9 +341,26 @@ static int32_t Mp4DecParseFrameHeader(NX_V4L2DEC_HANDLE hDec, uint8_t *pbyStream
 
 static int32_t GetSequenceHeader(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqIn)
 {
-	uint8_t *pbySrc = pSeqIn->seqBuf;
-	uint8_t *pbyDst = (uint8_t *)hDec->hStream[0]->pBuffer;
-	int32_t iSize = pSeqIn->seqSize;
+	uint8_t *pbySrc = NULL;
+	uint8_t *pbyDst = NULL;
+	int32_t iSize = 0;
+
+	if ( NULL == hDec )
+	{
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle\n", __func__);
+		return API_RET_ERR_NULL;
+	}
+
+	if ( NULL == hDec->hStream[0] || NULL == hDec->hStream[0]->pBuffer ||
+		 NULL == pSeqIn || NULL == pSeqIn->seqBuf )
+	{
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle (Buffers are NULL)\n", __func__);
+		return API_RET_ERR_NULL;
+	}
+
+	pbySrc = pSeqIn->seqBuf;
+	pbyDst = (uint8_t *)hDec->hStream[0]->pBuffer;
+	iSize = pSeqIn->seqSize;
 
 	switch (hDec->codecType)
 	{
@@ -335,7 +376,7 @@ static int32_t GetSequenceHeader(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeq
 			break;
 		}
 		else
-			return -1;
+			return API_RET_ERR_SEQ_SIZE;
 
 	case V4L2_PIX_FMT_DIV3:
 		memcpy(pbyDst, pbySrc, pSeqIn->seqSize);
@@ -364,7 +405,7 @@ static int32_t GetSequenceHeader(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeq
 				if( (pbySrc[0] != 0x00) || (pbySrc[1] != 0x00) ||
 					(pbySrc[2] != 0x01) || (pbySrc[3] != 0xb0) )
 				{
-					return -1;
+					return API_RET_ERR_SEQ_START_CODE;
 				}
 			}
 		}
@@ -374,7 +415,7 @@ static int32_t GetSequenceHeader(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeq
 		if (pSeqIn->seqSize > 0)
 			memcpy(pbyDst, pbySrc, pSeqIn->seqSize);
 		else
-			return -1;
+			return API_RET_ERR_SEQ_SIZE;
 	}
 
 	return iSize;
@@ -461,28 +502,27 @@ static int32_t GetFrameStream(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, int
 /*----------------------------------------------------------------------------*/
 NX_V4L2DEC_HANDLE NX_V4l2DecOpen(uint32_t codecType)
 {
-	NX_V4L2DEC_HANDLE hDec = (NX_V4L2DEC_HANDLE)malloc(sizeof(struct NX_V4L2DEC_INFO));
-
-	memset(hDec, 0, sizeof(struct NX_V4L2DEC_INFO));
-
+	int32_t ret = 0;
+	struct v4l2_capability cap = {0,};
+	NX_V4L2DEC_HANDLE hDec = (NX_V4L2DEC_HANDLE)calloc(1, sizeof(struct NX_V4L2DEC_INFO));
+	if (NULL == hDec)
+	{
+		NX_DEC_COMMN_ERR_LOG("%s : malloc failed \n", __func__);
+		return NULL;
+	}
 	hDec->fd = V4l2DecOpen();
 	if (hDec->fd <= 0)
 	{
-		printf("Failed to open video decoder device\n");
+		NX_DEC_COMMN_ERR_LOG("%s : V4l2DecOpen failed\n", __func__);
 		goto ERROR_EXIT;
 	}
 
 	/* Query capabilities of Device */
+	if (ret = ioctl(hDec->fd, VIDIOC_QUERYCAP, &cap))
 	{
-		struct v4l2_capability cap;
-
-		memset(&cap, 0, sizeof(cap));
-
-		if (ioctl(hDec->fd, VIDIOC_QUERYCAP, &cap) != 0)
-		{
-			printf("failed to ioctl: VIDIOC_QUERYCAP\n");
-			goto ERROR_EXIT;
-		}
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_QUERYCAP", ret);
+		close(hDec->fd);
+		goto ERROR_EXIT;
 	}
 
 	hDec->codecType = codecType;
@@ -490,7 +530,10 @@ NX_V4L2DEC_HANDLE NX_V4l2DecOpen(uint32_t codecType)
 	return hDec;
 
 ERROR_EXIT:
-	free(hDec);
+	if(NULL != hDec){
+		free(hDec);
+		hDec = NULL;
+	}
 
 	return NULL;
 }
@@ -499,34 +542,36 @@ ERROR_EXIT:
 int32_t NX_V4l2DecClose(NX_V4L2DEC_HANDLE hDec)
 {
 	int32_t ret = 0, i;
-
+	
 	if (NULL == hDec)
 	{
-		printf("Fail, Invalid Handle.\n");
-		return -1;
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle\n", __func__);
+		return API_RET_ERR_NULL;
 	}
-
+	if(0 < hDec->fd)
 	{
 		enum v4l2_buf_type type;
-
+		
 		type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-		if (ioctl(hDec->fd, VIDIOC_STREAMOFF, &type) != 0)
+		if(ret = ioctl(hDec->fd, VIDIOC_STREAMOFF, &type))
 		{
-			printf("failed to ioctl: VIDIOC_STREAMOFF(Stream)\n");
-			return -1;
+			NX_DEC_BEBUG("%s : VIDIOC_STREAMOFF(Stream) Failed %d", __func__, ret);
 		}
-
+		
 		type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-		if (ioctl(hDec->fd, VIDIOC_STREAMOFF, &type) != 0)
+		if(ret = ioctl(hDec->fd, VIDIOC_STREAMOFF, &type))
 		{
-			printf("failed to ioctl: VIDIOC_STREAMOFF(Image)\n");
-			return -1;
+			NX_DEC_BEBUG("%s : VIDIOC_STREAMOFF(Image) Failed %d", __func__, ret);
 		}
-
-		for (i=0 ; i<STREAM_BUFFER_NUM ; i++)
-			NX_FreeMemory(hDec->hStream[i]);
-
+		
 		close(hDec->fd);
+	}
+	
+	for (i=0 ; i<STREAM_BUFFER_NUM ; i++) {
+		if(hDec->hStream[i]){
+			NX_FreeMemory(hDec->hStream[i]);
+			hDec->hStream[i] = NULL;
+		}
 	}
 
 	if (hDec->useExternalFrameBuffer == 0)
@@ -549,16 +594,30 @@ int32_t NX_V4l2DecClose(NX_V4L2DEC_HANDLE hDec)
 /*----------------------------------------------------------------------------*/
 int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqIn, NX_V4L2DEC_SEQ_OUT *pSeqOut)
 {
-	int32_t imgWidth = pSeqIn->width;
-	int32_t imgHeight = pSeqIn->height;
-
-	memset(pSeqOut, 0, sizeof(NX_V4L2DEC_SEQ_OUT));
+	int32_t imgWidth = 0;
+	int32_t imgHeight = 0;
+	int32_t i, buffCnt = STREAM_BUFFER_NUM;
+	int32_t ret = 0;
 
 	if (NULL == hDec)
 	{
-		printf("Fail, Invalid Handle.\n");
-		return -1;
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle\n", __func__);
+		return API_RET_ERR_NULL;
 	}
+	
+	if (NULL == pSeqIn || NULL == pSeqOut)
+	{
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle (Buffers are NULL)\n", __func__);
+		return API_RET_ERR_NULL;
+	}
+	if(0 >= hDec->fd){
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid fd\n", __func__);
+		return API_RET_ERROR;
+	}
+	
+	imgWidth = pSeqIn->width;
+	imgHeight = pSeqIn->height;
+	memset(pSeqOut, 0, sizeof(NX_V4L2DEC_SEQ_OUT));
 
 	hDec->seqDataSize = (pSeqIn->seqSize < 1024) ? pSeqIn->seqSize : sizeof(hDec->pSeqData);
 	memcpy(hDec->pSeqData, pSeqIn->seqBuf, hDec->seqDataSize);
@@ -581,17 +640,16 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 		fmt.fmt.pix_mp.height = imgHeight;
 		fmt.fmt.pix_mp.num_planes = 1;
 
-		if (ioctl(hDec->fd, VIDIOC_S_FMT, &fmt) != 0)
+		if (ret = ioctl(hDec->fd, VIDIOC_S_FMT, &fmt) != 0)
 		{
-			printf("Failed to ioctl : VIDIOC_S_FMT(Input Stream)\n");
-			return -1;
+			NX_DEC_IOCTL_ERR_LOG("VIDIOC_S_FMT(Input Stream)", ret);
+			return API_RET_ERR_SET_FMT;
 		}
 	}
 
 	/* Malloc Stream Buffer */
 	{
 		struct v4l2_requestbuffers req;
-		int32_t i, buffCnt = STREAM_BUFFER_NUM;
 
 		/* IOCTL : VIDIOC_REQBUFS For Input Stream */
 		memset(&req, 0, sizeof(req));
@@ -599,10 +657,10 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 		req.count = buffCnt;
 		req.memory = V4L2_MEMORY_DMABUF;
 
-		if (ioctl(hDec->fd, VIDIOC_REQBUFS, &req) != 0)
+		if (ret = ioctl(hDec->fd, VIDIOC_REQBUFS, &req) != 0)
 		{
-			printf("failed to ioctl: VIDIOC_REQBUFS(Input Stream)\n");
-			return -1;
+			NX_DEC_IOCTL_ERR_LOG("VIDIOC_REQBUFS(Input Stream)", ret);
+			return API_RET_ERR_REQ_BUF;
 		}
 
 		for (i=0 ; i<buffCnt ; i++)
@@ -610,15 +668,29 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 			hDec->hStream[i] = NX_AllocateMemory(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT * 3 / 4, 4096);
 			if (hDec->hStream[i] == NULL)
 			{
-				printf("Failed to allocate stream buffer(%d, %d)\n", i, MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT * 3 / 4);
-				return -1;
+				NX_DEC_COMMN_ERR_LOG("%s : NX_AllocateMemory(Stream)(%d, %d)\n", i, MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT * 3 / 4);
+				ret = API_RET_ERR_MALLOC;
+				break;
 			}
 
 			if (NX_MapMemory(hDec->hStream[i]) != 0)
 			{
-				printf("Stream memory Mapping Failed\n");
-				return -1;
+				NX_DEC_COMMN_ERR_LOG("%s : NX_MapMemory Failed\n", __func__);
+				ret = API_RET_ERR_MMAP;
+				break;
 			}
+		}
+		if (ret)
+		{
+			for (i=0 ; i<buffCnt ; i++)
+			{
+				if (hDec->hStream[i])
+				{
+					NX_FreeMemory(hDec->hStream[i]);
+					hDec->hStream[i] = NULL;
+				}
+			}
+			return ret;
 		}
 	}
 
@@ -630,25 +702,18 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 		ctrl.id = V4L2_CID_MPEG_VIDEO_THUMBNAIL_MODE;
 		ctrl.value = pSeqIn->thumbnailMode;
 
-		if (ioctl(hDec->fd, VIDIOC_S_CTRL, &ctrl) != 0)
+		if (ret = ioctl(hDec->fd, VIDIOC_S_CTRL, &ctrl) != 0)
 		{
-			printf("failed to ioctl: Set Thumbnail Mode\n");
-			return -1;
-		}
-	}
-
-	/* Set Parameter : lowDelay mode */
-	if (hDec->codecType == V4L2_PIX_FMT_H264)
-	{
-		struct v4l2_control ctrl;
-
-		ctrl.id = V4L2_CID_MPEG_VIDEO_LOW_DELAY_MODE;
-		ctrl.value = pSeqIn->lowDelay;
-
-		if (ioctl(hDec->fd, VIDIOC_S_CTRL, &ctrl) != 0)
-		{
-			printf("failed to ioctl: Set Low Delay Mode\n");
-			return -1;
+			NX_DEC_IOCTL_ERR_LOG("VIDIOC_S_CTRL(Thumbnail Mode)", ret);
+			for (i=0 ; i<buffCnt ; i++)
+			{
+				if (hDec->hStream[i])
+				{
+					NX_FreeMemory(hDec->hStream[i]);
+					hDec->hStream[i] = NULL;
+				}
+			}
+			return API_RET_ERR_CONTROL;
 		}
 	}
 
@@ -661,8 +726,16 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 
 		if (iSeqSize <= 0)
 		{
-			printf("Fail, input data has error!!");
-			return -1;
+			NX_DEC_BEBUG("%s : Input data has error!!\n", __func__);
+			for (i=0 ; i<buffCnt ; i++)
+			{
+				if (hDec->hStream[i])
+				{
+					NX_FreeMemory(hDec->hStream[i]);
+					hDec->hStream[i] = NULL;
+				}
+			}
+			return API_RET_ERR_SEQ_SIZE;
 		}
 
 		memset(&buf, 0, sizeof(buf));
@@ -687,15 +760,31 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 
 		hDec->iRemainStrmSize += iSeqSize;
 
-		if (ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
+		if (ret = ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
 		{
-			printf("failed to ioctl: VIDIOC_QBUF(Header Stream)\n");
-			return -1;
+			NX_DEC_IOCTL_ERR_LOG("VIDIOC_QBUF(Header Stream)", ret);
+			for (i=0 ; i<buffCnt ; i++)
+			{
+				if (hDec->hStream[i])
+				{
+					NX_FreeMemory(hDec->hStream[i]);
+					hDec->hStream[i] = NULL;
+				}
+			}
+			return API_RET_ERR_QBUF;
 		}
 
-		if (ioctl(hDec->fd, VIDIOC_STREAMON, &type) != 0) {
-			printf("Fail, ioctl(): VIDIOC_STREAMON. (Input)\n");
-			return -1;
+		if (ret = ioctl(hDec->fd, VIDIOC_STREAMON, &type)) {
+			NX_DEC_IOCTL_ERR_LOG("VIDIOC_STREAMON(Input)", ret);
+			for (i=0 ; i<buffCnt ; i++)
+			{
+				if (hDec->hStream[i])
+				{
+					NX_FreeMemory(hDec->hStream[i]);
+					hDec->hStream[i] = NULL;
+				}
+			}
+			return API_RET_ERR_STREAM_ON_ST;
 		}
 
 		memset(&buf, 0, sizeof(buf));
@@ -704,10 +793,18 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 		buf.length = 1;
 		buf.memory = V4L2_MEMORY_DMABUF;
 
-		if (ioctl(hDec->fd, VIDIOC_DQBUF, &buf) != 0)
+		if (ret = ioctl(hDec->fd, VIDIOC_DQBUF, &buf) != 0)
 		{
-			printf("failed to ioctl: VIDIOC_DQBUF(Header Stream)\n");
-			return -1;
+			NX_DEC_IOCTL_ERR_LOG("VIDIOC_DQBUF(Header Stream)", ret);
+			for (i=0 ; i<buffCnt ; i++)
+			{
+				if (hDec->hStream[i])
+				{
+					NX_FreeMemory(hDec->hStream[i]);
+					hDec->hStream[i] = NULL;
+				}
+			}
+			return API_RET_ERR_DQBUF;
 		}
 
 		pSeqOut->usedByte = buf.bytesused;
@@ -729,10 +826,18 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 		memset(&fmt, 0, sizeof(fmt));
 		fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 
-		if (ioctl(hDec->fd, VIDIOC_G_FMT, &fmt) != 0)
+		if (ret = ioctl(hDec->fd, VIDIOC_G_FMT, &fmt) != 0)
 		{
-			printf("Fail, ioctl(): VIDIOC_G_FMT.\n");
-			return -1;
+			NX_DEC_IOCTL_ERR_LOG("VIDIOC_G_FMT", ret);
+			for (i=0 ; i<buffCnt ; i++)
+			{
+				if (hDec->hStream[i])
+				{
+					NX_FreeMemory(hDec->hStream[i]);
+					hDec->hStream[i] = NULL;
+				}
+			}
+			return API_RET_ERR_GET_FMT;
 		}
 
 		pSeqOut->width = fmt.fmt.pix_mp.width;
@@ -743,10 +848,18 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 		memset(&crop, 0, sizeof(crop));
 		crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 
-		if (ioctl(hDec->fd, VIDIOC_G_CROP, &crop) != 0)
+		if (ret = ioctl(hDec->fd, VIDIOC_G_CROP, &crop) != 0)
 		{
-			printf("Fail, ioctl(): VIDIOC_G_CROP\n");
-			return -1;
+			NX_DEC_IOCTL_ERR_LOG("VIDIOC_G_CROP", ret);
+			for (i=0 ; i<buffCnt ; i++)
+			{
+				if (hDec->hStream[i])
+				{
+					NX_FreeMemory(hDec->hStream[i]);
+					hDec->hStream[i] = NULL;
+				}
+			}
+			return API_RET_ERR_GET_CROP;
 		}
 
 		pSeqOut->dispInfo.dispLeft = crop.c.left;
@@ -755,7 +868,12 @@ int32_t NX_V4l2DecParseVideoCfg(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqI
 		pSeqOut->dispInfo.dispBottom = crop.c.top + crop.c.height;
 	}
 
-	return 0;
+	return API_RET_OK;
+}
+
+#define FD_IS_VALID(_fd) { \
+    if (fcntl(_fd, F_GETFD) != -1 || errno != EBADF) \
+	printf("[%d] [%s:%d] fd.%d is invalid\n", gettid(), __FUNCTION__, __LINE__, _fd); \
 }
 
 /*----------------------------------------------------------------------------*/
@@ -767,6 +885,19 @@ int32_t NX_V4l2DecInit(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqIn)
 	struct v4l2_buffer buf;
 	enum v4l2_buf_type type;
 	int32_t imgBuffCnt, i, j;
+	int32_t ret = 0;
+
+	if (NULL == hDec)
+	{
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle\n", __func__);
+		return API_RET_ERR_NULL;
+	}	
+	
+	if(NULL == pSeqIn)
+	{
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle (Buffers are NULL)\n", __func__);
+		return API_RET_ERR_NULL;
+	}	
 
 	/* Calculate Buffer Number */
 	if (pSeqIn->pMemHandle == NULL)
@@ -779,8 +910,8 @@ int32_t NX_V4l2DecInit(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqIn)
 		hDec->useExternalFrameBuffer = true;
 		if (2 > pSeqIn->numBuffers - hDec->numFrameBuffers)
 		{
-			printf("External Buffer too small.(min=%d, buffers=%d)\n", hDec->numFrameBuffers, pSeqIn->numBuffers );
-			return -1;
+			NX_DEC_COMMN_ERR_LOG("%s : External Buffer too small.(min=%d, buffers=%d)\n", __func__, hDec->numFrameBuffers, pSeqIn->numBuffers);
+			return API_RET_ERR_BUF_SIZE;
 		}
 
 		imgBuffCnt = pSeqIn->numBuffers;
@@ -799,15 +930,30 @@ int32_t NX_V4l2DecInit(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqIn)
 			hDec->hImage[i] = NX_AllocateVideoMemory(pSeqIn->width, pSeqIn->height, pSeqIn->imgPlaneNum, pSeqIn->imgFormat, 4096);
 			if (hDec->hImage[i] == NULL)
 			{
-				printf("Failed to allocate image buffer(%d, %d, %d)\n", i, pSeqIn->width, pSeqIn->height);
-				return -1;
+				NX_DEC_COMMN_ERR_LOG("%s : Failed to allocate image buffer(%d, %d, %d)\n", __func__, i, pSeqIn->width, pSeqIn->height);
+				ret = API_RET_ERR_MALLOC;
+				break;
 			}
 
 			if (NX_MapVideoMemory(hDec->hImage[i]) != 0)  {
-				printf("Video Memory Mapping Failed\n");
-				return -1;
+				NX_DEC_COMMN_ERR_LOG("%s : NX_MapVideoMemory Failed\n", __func__);
+				ret = API_RET_ERR_MMAP;
+				break;
 			}
 		}
+	}
+
+	if (ret)
+	{		
+		for (i=0 ; i<imgBuffCnt ; i++)
+		{
+			if (hDec->hImage[i])
+			{
+				NX_FreeVideoMemory(hDec->hImage[i]);
+				hDec->hImage[i] = NULL;
+			}
+		}
+		return ret;
 	}
 
 	/* Set Output Image */
@@ -823,10 +969,18 @@ int32_t NX_V4l2DecInit(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqIn)
 		fmt.fmt.pix_mp.plane_fmt[i].bytesperline = hDec->hImage[0]->stride[i];
 	}
 
-	if (ioctl(hDec->fd, VIDIOC_S_FMT, &fmt) != 0)
+	if (ret = ioctl(hDec->fd, VIDIOC_S_FMT, &fmt) != 0)
 	{
-		printf("failed to ioctl: VIDIOC_S_FMT(Output Yuv)\n");
-		return -1;
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_S_FMT(Output Yuv)", ret);
+		for (i=0 ; i<imgBuffCnt ; i++)
+		{
+			if (hDec->hImage[i])
+			{
+				NX_FreeVideoMemory(hDec->hImage[i]);
+				hDec->hImage[i] = NULL;
+			}
+		}
+		return API_RET_ERR_SET_FMT;
 	}
 
 	hDec->planesNum = pSeqIn->imgPlaneNum;
@@ -837,10 +991,18 @@ int32_t NX_V4l2DecInit(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqIn)
 	req.count = imgBuffCnt;
 	req.memory = V4L2_MEMORY_DMABUF;
 
-	if (ioctl(hDec->fd, VIDIOC_REQBUFS, &req) != 0)
+	if (ret = ioctl(hDec->fd, VIDIOC_REQBUFS, &req) != 0)
 	{
-		printf("failed to ioctl: VIDIOC_REQBUFS(Output YUV)\n");
-		return -1;
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_REQBUFS(Output Yuv)", ret);
+		for (i=0 ; i<imgBuffCnt ; i++)
+		{
+			if (hDec->hImage[i])
+			{
+				NX_FreeVideoMemory(hDec->hImage[i]);
+				hDec->hImage[i] = NULL;
+			}
+		}
+		return API_RET_ERR_REQ_BUF;
 	}
 
 	memset(&buf, 0, sizeof(buf));
@@ -864,18 +1026,40 @@ int32_t NX_V4l2DecInit(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_SEQ_IN *pSeqIn)
 			buf.m.planes[j].length = hDec->hImage[i]->size[j];
 		}
 
-		if (ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
+		if (ret = ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
 		{
-			printf("failed to ioctl: VIDIOC_QBUF(Output YUV - %d)\n", i);
-			return -1;
+			NX_DEC_IOCTL_ERR_LOG_PARAM("VIDIOC_QBUF(Output Yuv)", ret, i);
+			ret = API_RET_ERR_QBUF;
+			break;
 		}
 	}
 
-	type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-	if (ioctl(hDec->fd, VIDIOC_STREAMON, &type) != 0)
+	if (ret)
 	{
-		printf("failed to ioctl: VIDIOC_STREAMON\n");
-		return -1;
+		for (i=0 ; i<imgBuffCnt ; i++)
+		{
+			if (hDec->hImage[i])
+			{
+				NX_FreeVideoMemory(hDec->hImage[i]);
+				hDec->hImage[i] = NULL;
+			}
+		}
+		return ret;
+	}
+
+	type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	if (ret = ioctl(hDec->fd, VIDIOC_STREAMON, &type) != 0)
+	{
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_STREAMON", ret);
+		for (i=0 ; i<imgBuffCnt ; i++)
+		{
+			if (hDec->hImage[i])
+			{
+				NX_FreeVideoMemory(hDec->hImage[i]);
+				hDec->hImage[i] = NULL;
+			}
+		}
+		return API_RET_ERR_STREAM_ON_IM;
 	}
 
 
@@ -887,17 +1071,24 @@ int32_t NX_V4l2DecDecodeFrame(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, NX_
 {
 	struct v4l2_buffer buf;
 	struct v4l2_plane planes[3];
-	int idx;
+	int idx = 0;
 	int32_t iStrmSize;
 	int32_t frameType;
+	int32_t ret = 0;
 
 	uint32_t iDecodedUsed = 0, iDisplayUsed = 0;
 
-	if (NULL == hDec)
+	if (NULL == hDec) 
 	{
-		printf("Fail, Invalid Handle.\n");
-		return -1;
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle\n", __func__);
+		return API_RET_ERR_NULL;
 	}
+	if (NULL == pDecIn || NULL == pDecOut)
+	{
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle (Buffers are NULL)\n", __func__);
+		return API_RET_ERR_NULL;
+	}
+	
 
 	memset( pDecOut, 0x00, sizeof(NX_V4L2DEC_OUT) );
 	pDecOut->decIdx    = -1;
@@ -928,10 +1119,10 @@ int32_t NX_V4l2DecDecodeFrame(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, NX_
 	buf.m.planes[0].bytesused = iStrmSize;
 	buf.m.planes[0].data_offset = 0;
 
-	if (ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
+	if (ret = ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
 	{
-		printf("Fail, ioctl(): VIDIOC_QBUF.(Input)\n");
-		return -1;
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_QBUF(Input)", ret);
+		return API_RET_ERR_QBUF;
 	}
 
 	if (iStrmSize > 0)
@@ -943,10 +1134,10 @@ int32_t NX_V4l2DecDecodeFrame(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, NX_
 		buf.length = 1;
 		buf.memory = V4L2_MEMORY_DMABUF;
 
-		if (ioctl(hDec->fd, VIDIOC_DQBUF, &buf) != 0)
+		if (ret = ioctl(hDec->fd, VIDIOC_DQBUF, &buf) != 0)
 		{
-			printf("Fail, ioctl(): VIDIOC_DQBUF.(Input)\n");
-			return -1;
+			NX_DEC_IOCTL_ERR_LOG("VIDIOC_DQBUF(Input)", ret);
+			return API_RET_ERR_DQBUF;
 		}
 
 		pDecOut->decIdx = buf.index;
@@ -983,10 +1174,9 @@ int32_t NX_V4l2DecDecodeFrame(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, NX_
 	buf.length = hDec->planesNum;
 	buf.memory = V4L2_MEMORY_DMABUF;
 
-	if (ioctl(hDec->fd, VIDIOC_DQBUF, &buf) != 0)
-	{
-		printf("Fail, ioctl(): VIDIOC_DQBUF(Output)\n");
-		return -100;
+	if (ret = ioctl(hDec->fd, VIDIOC_DQBUF, &buf)) {
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_DQBUF(Output) ERRORNO", errno);
+		return API_RET_ERR_DEC_DQBUF;
 	}
 
 	pDecOut->dispIdx = buf.index;
@@ -1024,10 +1214,10 @@ int32_t NX_V4l2DecDecodeFrame(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, NX_
 
 	hDec->frameCnt++;
 
-	if (pDecOut->dispIdx == -1 || pDecOut->dispIdx == -20)
-		return -1;
+	if (pDecOut->dispIdx == -1)
+		return API_RET_ERR_DISP_IDX;
 
-	return 0;
+	return API_RET_OK;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -1037,11 +1227,12 @@ int32_t NX_V4l2DecClrDspFlag(NX_V4L2DEC_HANDLE hDec, NX_VID_MEMORY_HANDLE hFrame
 	struct v4l2_plane planes[3];
 	int32_t index = -1;
 	int32_t i;
+	int32_t ret = 0;
 
 	if (NULL == hDec)
 	{
-		printf("Fail, Invalid Handle.\n");
-		return -1;
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle\n", __func__);
+		return API_RET_ERR_NULL;
 	}
 
 	if (iFrameIdx >= 0)
@@ -1066,8 +1257,8 @@ int32_t NX_V4l2DecClrDspFlag(NX_V4L2DEC_HANDLE hDec, NX_VID_MEMORY_HANDLE hFrame
 
 	if (index < 0)
 	{
-		printf("Fail, Invalid FrameBuffer or FrameIndex.\n");
-		return -1;
+		NX_DEC_BEBUG("%s : Invalid FrameBuffer or FrameIndex\n", __func__);
+		return API_RET_ERR_FRAME_IDX;
 	}
 
 	memset(&buf, 0, sizeof(buf));
@@ -1088,84 +1279,82 @@ int32_t NX_V4l2DecClrDspFlag(NX_V4L2DEC_HANDLE hDec, NX_VID_MEMORY_HANDLE hFrame
 	}
 
 	/* Queue Output Buffer */
-	if (ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
+	if (ret = ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
 	{
-		printf("Fail, ioctl(): VIDIOC_QBUF.(Clear Display Index, index = %d)\n", index);
-		return -1;
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_QBUF(ClrDspFlag)", ret);
+		return API_RET_ERR_QBUF;
 	}
 
-	return 0;
+	return API_RET_OK;
 }
 
 /*----------------------------------------------------------------------------*/
 int32_t NX_V4l2DecFlush(NX_V4L2DEC_HANDLE hDec)
 {
 	enum v4l2_buf_type type;
+	int32_t ret = 0;	
+	struct v4l2_plane planes[3];
+	struct v4l2_buffer buf;
+	int32_t i, j;
 
 	if (NULL == hDec)
 	{
-		printf("Fail, Invalid Handle.\n");
-		return -1;
+		NX_DEC_COMMN_ERR_LOG("%s : Invalid Handle\n", __func__);
+		return API_RET_ERR_NULL;
 	}
 
 	type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-	if (ioctl(hDec->fd, VIDIOC_STREAMOFF, &type) != 0)
+	if (ret = ioctl(hDec->fd, VIDIOC_STREAMOFF, &type) != 0)
 	{
-		printf("failed to ioctl: VIDIOC_STREAMOFF(Stream)\n");
-		return -1;
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_STREAMOFF(Stream)", ret);
+		return API_RET_ERR_STREAM_OFF_ST;
 	}
 
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-	if (ioctl(hDec->fd, VIDIOC_STREAMOFF, &type) != 0)
+	if (ret = ioctl(hDec->fd, VIDIOC_STREAMOFF, &type) != 0)
 	{
-		printf("failed to ioctl: VIDIOC_STREAMOFF(Image)\n");
-		return -1;
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_STREAMOFF(Image)", ret);
+		return API_RET_ERR_STREAM_OFF_IM;
 	}
 
 	type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-	if (ioctl(hDec->fd, VIDIOC_STREAMON, &type) != 0)
+	if (ret = ioctl(hDec->fd, VIDIOC_STREAMON, &type) != 0)
 	{
-		printf("Fail, ioctl(): VIDIOC_STREAMON. (Input)\n");
-		return -1;
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_STREAMON(Input)", ret);
+		return API_RET_ERR_STREAM_ON_ST;
 	}
 
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-	if (ioctl(hDec->fd, VIDIOC_STREAMON, &type) != 0)
+	if (ret = ioctl(hDec->fd, VIDIOC_STREAMON, &type) != 0)
 	{
-		printf("failed to ioctl: VIDIOC_STREAMON\n");
-		return -1;
+		NX_DEC_IOCTL_ERR_LOG("VIDIOC_STREAMON(Image)", ret);
+		return API_RET_ERR_STREAM_ON_IM;
 	}
 
+	memset(&buf, 0, sizeof(buf));
+	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	buf.m.planes = planes;
+	buf.length = hDec->planesNum;
+	buf.memory = V4L2_MEMORY_DMABUF;
+
+	for (i = 0 ; i < hDec->numFrameBuffers ; i++)
 	{
-		struct v4l2_plane planes[3];
-		struct v4l2_buffer buf;
-		int32_t i, j;
+		buf.index = i;
 
-		memset(&buf, 0, sizeof(buf));
-		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-		buf.m.planes = planes;
-		buf.length = hDec->planesNum;
-		buf.memory = V4L2_MEMORY_DMABUF;
-
-		for (i = 0 ; i < hDec->numFrameBuffers ; i++)
+		for (j = 0 ; j < (int32_t)hDec->planesNum; j++)
 		{
-			buf.index = i;
-
-			for (j = 0 ; j < (int32_t)hDec->planesNum; j++)
-			{
 #ifndef USE_ION_ALLOCATOR
-				buf.m.planes[j].m.fd = hDec->hImage[i]->dmaFd[j];
+			buf.m.planes[j].m.fd = hDec->hImage[i]->dmaFd[j];
 #else
-				buf.m.planes[j].m.fd = hDec->hImage[i]->sharedFd[j];
+			buf.m.planes[j].m.fd = hDec->hImage[i]->sharedFd[j];
 #endif
-				buf.m.planes[j].length = hDec->hImage[i]->size[j];
-			}
+			buf.m.planes[j].length = hDec->hImage[i]->size[j];
+		}
 
-			if (ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
-			{
-				printf("failed to ioctl: VIDIOC_QBUF(Output YUV - %d)\n", i);
-				return -1;
-			}
+		if (ret = ioctl(hDec->fd, VIDIOC_QBUF, &buf) != 0)
+		{
+			NX_DEC_IOCTL_ERR_LOG_PARAM("VIDIOC_QBUF(Output YUV)", ret, i);
+			return API_RET_ERR_QBUF;
 		}
 	}
 
@@ -1176,12 +1365,16 @@ int32_t NX_V4l2DecFlush(NX_V4L2DEC_HANDLE hDec)
 /* Optional Function */
 int32_t NX_DecGetFrameType(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, uint32_t codecType, int32_t *piFrameType)
 {
-	uint8_t *pbyStrm = pDecIn->strmBuf;
+	uint8_t *pbyStrm = NULL;
 	uint32_t uPreFourByte = (uint32_t)-1;
 	int32_t  iFrmType = PIC_TYPE_UNKNOWN;
 
-	if ((pbyStrm == NULL) || (piFrameType == NULL))
-		return -1;
+	if ((hDec == NULL) || (pDecIn == NULL) || (piFrameType == NULL))
+		return API_RET_ERR_NULL;
+
+	pbyStrm = pDecIn->strmBuf;
+	if (pbyStrm == NULL)
+		return API_RET_ERR_NULL;
 
 	if (!codecType)
 		codecType = hDec->codecType;
@@ -1192,7 +1385,7 @@ int32_t NX_DecGetFrameType(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, uint32
 		do
 		{
 			if (pbyStrm >= (pDecIn->strmBuf + pDecIn->strmSize))
-				return -1;
+				return API_RET_ERR_H264;
 
 			uPreFourByte = (uPreFourByte << 8) + *pbyStrm++;
 
@@ -1229,7 +1422,7 @@ int32_t NX_DecGetFrameType(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, uint32
 		do
 		{
 			if (pbyStrm >= (pDecIn->strmBuf + pDecIn->strmSize))
-				return -1;
+				return API_RET_ERR_MP2;
 
 			uPreFourByte = (uPreFourByte << 8) + *pbyStrm++;
 
@@ -1253,11 +1446,10 @@ int32_t NX_DecGetFrameType(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, uint32
 		break;
 
 	case V4L2_PIX_FMT_WVC1:
-		if (hDec == NULL || hDec->seqDataSize == 0)
-			return -1;
-
 		{
 			VLD_STREAM stStrm = { 0, pbyStrm, pDecIn->strmSize };
+			if (hDec->seqDataSize == 0)
+				return API_RET_ERR_VC1;
 
 			if (hDec->iInterlace != NONE_FIELD)
 			{
@@ -1299,14 +1491,13 @@ int32_t NX_DecGetFrameType(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, uint32
 		break;
 
 	case V4L2_PIX_FMT_WMV9:
-		if (hDec == NULL || hDec->seqDataSize == 0)
-			return -1;
-
 		{
 			int32_t rangeRed;
 			int32_t fInterPFlag;
 			int32_t maxBframes;
 			VLD_STREAM stStrm = { 24, hDec->pSeqData, hDec->seqDataSize };
+			if (hDec->seqDataSize == 0)
+				return API_RET_ERR_WMV9;
 
 			/* Parse Sequece Header */
 			rangeRed = vld_get_bits(&stStrm, 1);
@@ -1355,10 +1546,10 @@ int32_t NX_DecGetFrameType(NX_V4L2DEC_HANDLE hDec, NX_V4L2DEC_IN *pDecIn, uint32
 		break;
 
 	default:
-		return -1;
+		return API_RET_ERROR;
 	}
 
 	*piFrameType = iFrmType;
 
-	return 0;
+	return API_RET_OK;
 }

@@ -23,6 +23,34 @@
 extern "C"{
 #endif
 
+/* Error Code */
+#define API_RET_ERR_DEC_DQBUF			-100	/* VIDIOC DQBUF(Output) Error */
+#define API_RET_ERR_H264				-24	/* H264 Error */
+#define API_RET_ERR_MP2					-23	/* MP2 Error */
+#define API_RET_ERR_VC1					-22	/* VC1 Error */
+#define API_RET_ERR_WMV9				-21	/* WMV9 Error */
+#define API_RET_ERR_FRAME_IDX			-20	/* FrameIndex Error */
+#define API_RET_ERR_DISP_IDX			-19	/* Display Index Error */
+#define API_RET_ERR_BUF_SIZE			-18	/* Buffer Size Small */
+#define API_RET_ERR_STREAM_OFF_IM		-17	/* VIDIOC StreamOff(Image) Error */
+#define API_RET_ERR_STREAM_OFF_ST		-16	/* VIDIOC StreamOff(Stream) Error */
+#define API_RET_ERR_STREAM_ON_IM		-15	/* VIDIOC StreamOn(Image) Error */
+#define API_RET_ERR_STREAM_ON_ST		-14	/* VIDIOC StreamOn(Stream) Error */	
+#define API_RET_ERR_REQ_BUF				-13	/* VIDIOC Request Buffer Error */
+#define API_RET_ERR_SET_FMT				-12	/* VIDIOC Set Format Error */
+#define API_RET_ERR_GET_CROP			-11	/* VIDIOC Get Crop Error */
+#define API_RET_ERR_GET_FMT				-10	/* VIDIOC Get Format Error */
+#define API_RET_ERR_DQBUF				-9	/* VIDIOC DQBUF Error */
+#define API_RET_ERR_QBUF				-8	/* VIDIOC QBUF Error */
+#define API_RET_ERR_CONTROL				-7	/* V4l2 Control Error */
+#define API_RET_ERR_MMAP				-6	/* MapMemory Error */
+#define API_RET_ERR_MALLOC				-5	/* AllocateMemory Error */
+#define API_RET_ERR_NULL				-4	/* Handle NUll Error */
+#define API_RET_ERR_SEQ_SIZE			-3	/* Sequence Size Error */
+#define API_RET_ERR_SEQ_START_CODE		-2	/* Sequence Start Code Error */
+#define API_RET_ERROR					-1	/* General Error */
+#define API_RET_OK						0
+
 #define MAX_FRAME_BUFFER_NUM		32
 #define MAX_IMAGE_WIDTH				1920
 #define MAX_IMAGE_HEIGHT			1088

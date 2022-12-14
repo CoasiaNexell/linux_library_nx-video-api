@@ -25,6 +25,7 @@
 #include <libdrm/drm_fourcc.h>
 #include <linux/videodev2.h>
 #include <linux/videodev2_nxp_media.h>
+#include <sys/syscall.h>
 
 #define DRM_DEVICE_NAME "/dev/dri/card0"
 
@@ -42,6 +43,8 @@
 #ifndef ALIGNED16
 #define	ALIGNED16(X)	ALIGN(X,16)
 #endif
+
+#define gettid() ((pid_t)syscall(SYS_gettid))
 
 static int drm_ioctl(int32_t drm_fd, uint32_t request, void *arg)
 {
@@ -430,6 +433,8 @@ ErrorExit:
 		{
 			close( dmaFd[i] );
 		}
+		if( IsContinuousPlanes(format) )
+			break;
 	}
 
 	if( drmFd > 0 )
@@ -449,6 +454,8 @@ void NX_FreeVideoMemory( NX_VID_MEMORY_INFO * pMem )
 		{
 			free_gem( pMem->drmFd, pMem->gemFd[i] );
 			close( pMem->dmaFd[i] );
+			if( IsContinuousPlanes(pMem->format) )
+				break;
 		}
 
 		close( pMem->drmFd );
